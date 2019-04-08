@@ -8,6 +8,17 @@
 
 import XCTest
 
+struct UIElement {
+    let id: String
+    let isEnabled: Bool
+    let isHittable: Bool
+    let isSelected: Bool
+    let x: Double
+    let y: Double
+    let name: String
+    let possibleActions: [String]
+}
+
 extension XCUIElement {
     func forceTapElement() {
         if !self.exists {
@@ -38,6 +49,21 @@ class ElementsExtractor {
     ]
 
     private var allElements: [XCUIElement] = []
+
+    private func makeInputJSON(list: [UIElement]) -> [String: Any?] {
+        return [
+            "feedback": [
+                "status": "OK",
+                "error": ""
+            ],
+            "elements": nil, //?
+            "global": [
+                "screenSize" : nil,
+                "screenshot": nil,
+                "possibleActions": nil
+            ]
+        ]
+    }
 
     public func getAllIdentifiers() -> [XCUIElement] {
         let start = CFAbsoluteTimeGetCurrent()
@@ -73,7 +99,7 @@ class ElementsExtractor {
             return
         }
         let i = Int.random(in: 0..<a.count)
-        let elementExists = a[i].waitForExistence(timeout: 10)
+        let _ = a[i].waitForExistence(timeout: 10)
 //        XCTAssert(elementExists)
         let element = a[i]
         print("Selected \(i)/\(a.count)")
