@@ -6,10 +6,11 @@
 //  Copyright © 2018 Hacking with Swift.
 //
 
+import Foundation
 import XCTest
 
 struct UIElement {
-    let id: String
+    var id: String
     let isEnabled: Bool
     let isHittable: Bool
     let isSelected: Bool
@@ -45,22 +46,48 @@ class ElementsExtractor {
     private let types = [
         XCUIElement.ElementType.button,
         XCUIElement.ElementType.textField,
-        XCUIElement.ElementType.staticText,
+        XCUIElement.ElementType.staticText
     ]
 
     private var allElements: [XCUIElement] = []
 
-    private func makeInputJSON(list: [UIElement]) -> [String: Any?] {
+    public func uielementToJSON(element: UIElement) -> [String: Any] {
         return [
-            "feedback": [
-                "status": "OK",
-                "error": ""
+            "id": element.id,
+            "name": element.name,
+//            "position": [
+//                "x": 1,
+//                "y": 2
+//            ],
+//            "size": [
+//                "x": 1,
+//                "y": 2
+//            ],
+            "attributes": [
+                "isSelected": element.isSelected,
+                "isHittable": element.isHittable,
+                "isEnabled": element.isEnabled,
+                "center": [
+                    "x": element.x,
+                    "y": element.y
+                ]
             ],
-            "elements": nil, //?
+            "possibleActions": [
+                "TAP"
+            ]
+        ]
+    }
+
+    public func makeInputJSON(list: [UIElement]) -> [String: Any] {
+        let dictList = list.map {
+            uielementToJSON(element: $0)
+        }
+        return [
+            "elements": dictList, //?
             "global": [
-                "screenSize" : nil,
-                "screenshot": nil,
-                "possibleActions": nil
+                "screenSize": "",
+                "screenshot": "",
+                "possibleActions": ""
             ]
         ]
     }
@@ -111,7 +138,7 @@ class ElementsExtractor {
     }
 
     @discardableResult
-    private func go(element: XCUIElement) -> Bool {
+    public func go(element: XCUIElement) -> Bool {
         if !element.exists {
             return false
         }
@@ -139,7 +166,6 @@ class ElementsExtractor {
         return "common=\(element) label=\(element.label) identifier=\(element.identifier) value=\(element.value ?? "") exists=\(element.exists) enabled=\(element.isEnabled) hittable=\(element.isHittable)"
     }
 }
-
 
 class UnwrapUITests: XCTestCase {
 
@@ -305,4 +331,61 @@ class UnwrapUITests: XCTestCase {
         }
     }
 
+    func testHTTP() {
+        let e = ElementsExtractor()
+
+
+        let a = e.getAllElements(type: XCUIElement.ElementType.button)
+        if a.isEmpty {
+            return
+        }
+
+        var list = a.map {
+            UIElement(id: $0.identifier, isEnabled: $0.isEnabled, isHittable: $0.isHittable, isSelected: $0.isSelected, x: $0.frame.origin.x.native, y: $0.frame.origin.y.native, name: $0.label, possibleActions: ["click"])
+        }
+        for i in 0...(list.count - 1) {
+            list[i].id = String(i)
+        }
+
+        let jsonData: Data
+        do {
+            var good = false
+            jsonData = try JSONSerialization.data(withJSONObject: e.makeInputJSON(list: list))
+            let jsonString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)!
+            print(jsonString)
+
+            let url = URL(string: "http://0.0.0.0:8080/generate-action")!
+            var request = URLRequest(url: url)
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")  // the request is JSON
+            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Accept")
+            request.httpMethod = "POST"
+
+            request.httpBody = jsonData
+
+            let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                guard let data = data, error == nil else {
+                    print(error?.localizedDescription ?? "No data")
+                    return
+                }
+                let responseJSON = try? JSONSerialization.jsonObject(with: data, options: [])
+                if let responseJSON = responseJSON as? [String: Any] {
+                    let localId:Int? = Int(responseJSON["id"] as! String)
+                    if (responseJSON["action"] as! String) == "TAP" {
+                        e.go(element: a[localId!])
+                    } else {
+                        print("Got bad JSON")
+                    }
+                    print(responseJSON)
+                }
+                good = true
+            }
+            if !good {
+                print("Can't establish connection with the server. Abort")
+                exit(1)
+            }
+            task.resume()
+        } catch {
+            print("Problem..")
+        }
+    }
 }
