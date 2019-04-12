@@ -43,7 +43,7 @@ class ElementsExtractor {
     private static let blacklistedIdentifiers = ["YOAI_FoldersListHeaderAccountSwitcherAddAccount", "URL"]
     private static let blacklistedLabels = ["attachments share", "News"]
 
-    private let types = [
+    public let types = [
         XCUIElement.ElementType.button,
         XCUIElement.ElementType.textField,
         XCUIElement.ElementType.staticText
@@ -335,7 +335,10 @@ class UnwrapUITests: XCTestCase {
         let e = ElementsExtractor()
 
 
-        let a = e.getAllElements(type: XCUIElement.ElementType.button)
+        var a: [XCUIElement] = []
+        for type in e.types {
+            a += e.getAllElements(type: type)
+        }
         if a.isEmpty {
             return
         }
