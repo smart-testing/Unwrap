@@ -347,45 +347,48 @@ class UnwrapUITests: XCTestCase {
             list[i].id = String(i)
         }
 
-        let jsonData: Data
-        do {
-            var good = false
-            jsonData = try JSONSerialization.data(withJSONObject: e.makeInputJSON(list: list))
-            let jsonString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)!
-            print(jsonString)
+        var jsonData: Data
 
-            let url = URL(string: "http://0.0.0.0:8080/generate-action")!
-            var request = URLRequest(url: url)
-            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")  // the request is JSON
-            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Accept")
-            request.httpMethod = "POST"
+        for _ in 0...20 {
+            do {
+                jsonData = try JSONSerialization.data(withJSONObject: e.makeInputJSON(list: list))
+                let jsonString = NSString(data: jsonData, encoding: String.Encoding.utf8.rawValue)!
+                print(jsonString)
 
-            request.httpBody = jsonData
+                let url = URL(string: "http://0.0.0.0:8080/generate-action")!
+                var request = URLRequest(url: url)
+                request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")  // the request is JSON
+                request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Accept")
+                request.httpMethod = "POST"
 
-            let task = URLSession.shared.dataTask(with: request) { data, response, error in
-                guard let data = data, error == nil else {
-                    print(error?.localizedDescription ?? "No data")
-                    return
+                request.httpBody = jsonData
+
+                let expectation = XCTestExpectation(description: "Get JSON")
+
+                var responseJSON: Any?
+                let task = URLSession.shared.dataTask(with: request) { data, response, error in
+                    XCTAssertNotNil(data, "No data was downloaded.")
+                    responseJSON = try? JSONSerialization.jsonObject(with: data!, options: [])
+                    expectation.fulfill()
                 }
-                let responseJSON = try? JSONSerialization.jsonObject(with: data, options: [])
+                task.resume()
+                wait(for: [expectation], timeout: 10.0)
                 if let responseJSON = responseJSON as? [String: Any] {
-                    let localId:Int? = Int(responseJSON["id"] as! String)
-                    if (responseJSON["action"] as! String) == "TAP" {
-                        e.go(element: a[localId!])
+
+                    print(responseJSON.keys.contains("id"))
+                    if responseJSON.keys.contains("id") {
+                        let localId: Int = Int(responseJSON["id"] as! String)!
+                        if (responseJSON["action"] as! String) == "TAP" {
+                            e.go(element: a[localId])
+                        }
                     } else {
-                        print("Got bad JSON")
+                        print("No Action Required")
                     }
                     print(responseJSON)
                 }
-                good = true
+            } catch {
+                print("Problem..")
             }
-            if !good {
-                print("Can't establish connection with the server. Abort")
-                exit(1)
-            }
-            task.resume()
-        } catch {
-            print("Problem..")
         }
     }
 }
